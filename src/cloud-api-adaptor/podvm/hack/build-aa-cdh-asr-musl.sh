@@ -185,6 +185,17 @@ EOF
 chmod +x /usr/local/bin/rustc-dyn-build-script
 export RUSTC_WRAPPER=/usr/local/bin/rustc-dyn-build-script
 
+# tss-esapi-sys asks pkg-config for tss2-sys before tss2-esys. GNU ld scans
+# static archives once, so libtss2-esys.a then cannot see Tss2_Sys_* in
+# libtss2-sys.a. Append the libraries again, in dependency order, and pull
+# in libcrypto which the static TSS archives reference.
+cat > /usr/local/bin/musl-cc-tss << EOF
+#!/bin/sh
+exec cc "\$@" -Wl,--start-group -ltss2-esys -ltss2-sys -ltss2-tctildr -ltss2-mu -lcrypto -Wl,--end-group
+EOF
+chmod +x /usr/local/bin/musl-cc-tss
+export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=/usr/local/bin/musl-cc-tss
+
 # tdx-attester links libtdx_attest and bindgen needs tdx_attest.h. The Intel
 # RPM is a glibc shared library, which cannot be linked into a musl static
 # binary, so build a musl static archive from the DCAP sources cargo pins.
