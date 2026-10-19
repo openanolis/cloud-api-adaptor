@@ -163,6 +163,28 @@ if [ ! -e /usr/lib/libclang.so ]; then
 fi
 export LIBCLANG_PATH=/usr/lib
 
+# rustup musl host enables crt-static, so every build-script binary is
+# statically linked. musl then rejects dlopen with
+# "Dynamic loading not supported" and bindgen cannot load libclang.
+# Disable crt-static only for those build scripts. Pod VM binaries stay
+# static and still run on alinux3 glibc.
+mkdir -p /usr/local/bin
+cat > /usr/local/bin/rustc-dyn-build-script << EOF
+#!/bin/sh
+rustc="\$1"
+shift
+for arg in "\$@"; do
+  case "\$arg" in
+    build_script_build|--crate-name=build_script_build)
+      exec "\$rustc" "\$@" -C target-feature=-crt-static
+      ;;
+  esac
+done
+exec "\$rustc" "\$@"
+EOF
+chmod +x /usr/local/bin/rustc-dyn-build-script
+export RUSTC_WRAPPER=/usr/local/bin/rustc-dyn-build-script
+
 # tdx-attester links libtdx_attest and bindgen needs tdx_attest.h. The Intel
 # RPM is a glibc shared library, which cannot be linked into a musl static
 # binary, so build a musl static archive from the DCAP sources cargo pins.
