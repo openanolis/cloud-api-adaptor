@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     permissions:
-      contents: write
+      contents: write # Required to publish the overlay on a GitHub Release
     steps:
       - name: Checkout source
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -34,6 +34,7 @@ jobs:
         with:
           go-version-file: src/cloud-api-adaptor/go.mod
           cache-dependency-path: src/cloud-api-adaptor/go.sum
+          cache: false
 
       - name: Install build dependencies
         run: |

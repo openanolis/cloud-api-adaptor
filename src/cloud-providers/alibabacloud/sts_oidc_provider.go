@@ -36,7 +36,7 @@ type stsOIDCCredentialsProvider struct {
 
 type assumeRoleWithOIDCResponse struct {
 	Credentials *struct {
-		AccessKeyId     *string `json:"AccessKeyId"`
+		AccessKeyID     *string `json:"AccessKeyId"`
 		AccessKeySecret *string `json:"AccessKeySecret"`
 		SecurityToken   *string `json:"SecurityToken"`
 		Expiration      *string `json:"Expiration"`
@@ -95,7 +95,7 @@ func (p *stsOIDCCredentialsProvider) GetCredentials() (*providers.Credentials, e
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		return nil, fmt.Errorf("parse AssumeRoleWithOIDC response: %v", err)
 	}
-	if data.Credentials == nil || data.Credentials.AccessKeyId == nil ||
+	if data.Credentials == nil || data.Credentials.AccessKeyID == nil ||
 		data.Credentials.AccessKeySecret == nil || data.Credentials.SecurityToken == nil {
 		return nil, fmt.Errorf("AssumeRoleWithOIDC against %s: no credentials in response", p.stsEndpoint)
 	}
@@ -108,7 +108,7 @@ func (p *stsOIDCCredentialsProvider) GetCredentials() (*providers.Credentials, e
 	}
 
 	p.session = &providers.Credentials{
-		AccessKeyId:     *data.Credentials.AccessKeyId,
+		AccessKeyId:     *data.Credentials.AccessKeyID,
 		AccessKeySecret: *data.Credentials.AccessKeySecret,
 		SecurityToken:   *data.Credentials.SecurityToken,
 		ProviderName:    p.GetProviderName(),

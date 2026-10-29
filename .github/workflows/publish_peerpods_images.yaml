@@ -31,8 +31,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     permissions:
-      contents: read
-      packages: write
+      contents: read # Required to checkout the repository
+      packages: write # Required to push the CAA image to GHCR
     steps:
       - name: Checkout source
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
-      packages: write
+      packages: write # Required to push mirrored images to GHCR
     strategy:
       fail-fast: false
       matrix:
