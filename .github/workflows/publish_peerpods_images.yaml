@@ -1,0 +1,180 @@
+# Copyright Confidential Containers Contributors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Publish the private-cloud CAA DaemonSet image, and repush the container
+# images that cluster deployment depends on. Triggers match
+# podvm_alinux3_tree.yaml: any git tag, or a manual run.
+#
+# Both kinds of images are pushed to GHCR under the current organization.
+# Image repository names start with peerpods-:
+#   ghcr.io/<owner>/peerpods-cloud-api-adaptor:<tag>
+#   ghcr.io/<owner>/peerpods-cert-manager-controller:v1.9.1
+#   ...
+---
+name: Publish private-cloud Peer Pods images
+
+on:
+  push:
+    tags:
+      - '**'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  caa:
+    name: Publish CAA DaemonSet image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install yq
+        run: |
+          set -euo pipefail
+          sudo curl -fsSL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.35.1/yq_linux_amd64
+          echo "bd695a6513f1196aeda17b174a15e9c351843fb1cef5f9be0af170f2dd744f08  /usr/local/bin/yq" \
+            | sha256sum --check --strict
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Select image tags
+        id: tags
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "${EVENT_NAME}" == "push" ]]; then
+            version="${REF_NAME//\//-}"
+          else
+            version="${SHA:0:8}"
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "release_tags=${version},${SHA}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set registry
+        id: registry
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          echo "registry=ghcr.io/${OWNER,,}" >> "${GITHUB_OUTPUT}"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push release image
+        working-directory: src/cloud-api-adaptor
+        env:
+          RELEASE_BUILD: "true"
+          RELEASE_TAGS: ${{ steps.tags.outputs.release_tags }}
+          ARCHES: linux/amd64
+          APPEND_ARCH_SUFFIX: "false"
+          IMAGE_NAME: peerpods-cloud-api-adaptor
+          IMAGE_SOURCE: https://github.com/${{ github.repository }}
+          registry: ${{ steps.registry.outputs.registry }}
+        run: make image
+
+      - name: Write summary
+        env:
+          REGISTRY: ${{ steps.registry.outputs.registry }}
+          VERSION: ${{ steps.tags.outputs.version }}
+          SHA: ${{ github.sha }}
+        run: |
+          {
+            echo "### CAA DaemonSet"
+            echo ""
+            echo "- \`${REGISTRY}/peerpods-cloud-api-adaptor:${VERSION}\`"
+            echo "- \`${REGISTRY}/peerpods-cloud-api-adaptor:${SHA}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  dependencies:
+    name: Repush ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # docs/deployment.md §1.5. Tags stay the upstream versions.
+          - name: peerpods-cert-manager-controller
+            tag: v1.9.1
+            source: quay.io/jetstack/cert-manager-controller:v1.9.1
+          - name: peerpods-cert-manager-webhook
+            tag: v1.9.1
+            source: quay.io/jetstack/cert-manager-webhook:v1.9.1
+          - name: peerpods-cert-manager-cainjector
+            tag: v1.9.1
+            source: quay.io/jetstack/cert-manager-cainjector:v1.9.1
+          - name: peerpods-peerpod-ctrl
+            tag: v0.22.0
+            source: quay.io/confidential-containers/peerpod-ctrl:v0.22.0
+          - name: peerpods-webhook
+            tag: v0.22.0
+            source: quay.io/confidential-containers/peer-pods-webhook:v0.22.0
+          - name: peerpods-kube-rbac-proxy
+            tag: v0.14.0
+            source: registry.k8s.io/kubebuilder/kube-rbac-proxy:v0.14.0
+          - name: peerpods-kata-deploy
+            tag: "4.0.0"
+            source: quay.io/kata-containers/kata-deploy:4.0.0
+          # kata-deploy chart default. The ACK registry in deployment.md is an
+          # internal mirror of this image.
+          - name: peerpods-kubectl
+            tag: latest
+            source: quay.io/kata-containers/kubectl:latest
+    steps:
+      - name: Install skopeo
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes skopeo
+
+      - name: Log in to GitHub Container Registry
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          echo "${GITHUB_TOKEN}" | skopeo login ghcr.io \
+            --username "${GITHUB_ACTOR}" \
+            --password-stdin
+
+      - name: Repush image
+        env:
+          OWNER: ${{ github.repository_owner }}
+          IMAGE_NAME: ${{ matrix.name }}
+          IMAGE_TAG: ${{ matrix.tag }}
+          SOURCE: ${{ matrix.source }}
+        run: |
+          set -euo pipefail
+          dest="ghcr.io/${OWNER,,}/${IMAGE_NAME}:${IMAGE_TAG}"
+          skopeo copy --all "docker://${SOURCE}" "docker://${dest}"
+          {
+            echo "### ${IMAGE_NAME}"
+            echo ""
+            echo "- \`${dest}\`"
+            echo "- source \`${SOURCE}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
