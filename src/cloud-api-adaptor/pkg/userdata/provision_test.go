@@ -378,9 +378,13 @@ write_files:
 
 	provider := TestProvider{content: content}
 
-	cc, err := retrieveCloudConfig(context.TODO(), &provider)
+	raw, err := retrieveCloudConfig(context.TODO(), &provider)
 	if err != nil {
 		t.Fatalf("couldn't retrieve cloud config: %v", err)
+	}
+	cc, err := parseUserData(raw)
+	if err != nil {
+		t.Fatalf("couldn't parse cloud config: %v", err)
 	}
 
 	cfg := Config{
@@ -469,9 +473,13 @@ write_files:
 
 	provider := TestProvider{content: content}
 
-	cc, err := retrieveCloudConfig(context.TODO(), &provider)
+	raw, err := retrieveCloudConfig(context.TODO(), &provider)
 	if err != nil {
 		t.Fatalf("couldn't retrieve cloud config: %v", err)
+	}
+	cc, err := parseUserData(raw)
+	if err != nil {
+		t.Fatalf("couldn't parse cloud config: %v", err)
 	}
 
 	cfg := Config{

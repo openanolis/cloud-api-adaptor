@@ -78,7 +78,7 @@ else
 fi
 
 # Fresh machine-id for clones
-echo -n > /etc/machine-id
+: > /etc/machine-id
 
 # peerpod user (SFTP / user-data paths)
 if ! id peerpod >/dev/null 2>&1; then

@@ -42,7 +42,7 @@ fi
 # Check if govulncheck is installed
 if ! command -v govulncheck &> /dev/null; then
     echoerr "govulncheck is not installed, please install it by running:"
-    echoerr "go install golang.org/x/vuln/cmd/govulncheck@latest"
+    echoerr "go install golang.org/x/vuln/cmd/govulncheck@v1.7.0"
     exit 1
 fi
 
