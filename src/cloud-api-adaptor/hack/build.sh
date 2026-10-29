@@ -7,7 +7,7 @@ set -o nounset
 script_dir=$(dirname "$(readlink -f "$0")")
 
 registry="${registry:-quay.io/confidential-containers}"
-name="cloud-api-adaptor"
+name="${IMAGE_NAME:-cloud-api-adaptor}"
 release_build=${RELEASE_BUILD:-false}
 version=${VERSION:-unknown}
 commit=${COMMIT:-unknown}
@@ -35,8 +35,10 @@ function get_tag_string() {
 	local tag_string=""
 	local arch_suffix=""
 
-	# if we are building for a single arch, then also append this to the tag
-	if [[ -n "${arch:-}" ]] && [[ "${arch:-}" != *,* ]];then
+	# Single-arch builds append the arch so a later job can assemble a
+	# multi-arch tag. Set APPEND_ARCH_SUFFIX=false to publish the bare tag.
+	append_arch_suffix="${APPEND_ARCH_SUFFIX:-true}"
+	if [[ "${append_arch_suffix}" == "true" ]] && [[ -n "${arch:-}" ]] && [[ "${arch:-}" != *,* ]];then
 		# strip the `linux/` from the docker buildx platform format in the tag
 		arch_suffix="-${arch#"linux/"}"
 	fi
@@ -66,6 +68,11 @@ function build_caa_payload_image() {
 		buildx_options="--provenance false --sbom false"
 	fi
 
+	label_options=""
+	if [[ -n "${IMAGE_SOURCE:-}" ]]; then
+		label_options="--label org.opencontainers.image.source=${IMAGE_SOURCE}"
+	fi
+
 	docker buildx build --platform "${supported_arches}" ${buildx_options} \
 		--build-arg RELEASE_BUILD="${release_build}" \
 		--build-arg BUILD_TYPE="${build_type}" \
@@ -73,6 +80,7 @@ function build_caa_payload_image() {
 		--build-arg COMMIT="${commit}" \
 		--build-arg YQ_VERSION="${YQ_VERSION}" \
 		-f cloud-api-adaptor/Dockerfile \
+		${label_options} \
 		${tag_string} \
 		--push \
 		.
